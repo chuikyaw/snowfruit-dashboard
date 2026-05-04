@@ -97,7 +97,7 @@ def load_and_parse(file) -> pd.DataFrame:
 
     # Detect item name column
     item_col = find_column(df, [
-        "item", "item name", "product", "product name", "description",
+        "product name", "item", "item name", "product", "description",
         "desc", "name", "menu item", "item description"
     ])
     if item_col is None:
@@ -106,13 +106,13 @@ def load_and_parse(file) -> pd.DataFrame:
 
     # Detect quantity column
     qty_col = find_column(df, [
-        "qty", "quantity", "units", "count", "sold", "units sold",
+        "qs", "qty", "quantity", "units", "count", "sold", "units sold",
         "qty sold", "amount", "number"
     ])
 
     # Detect revenue / price column
     rev_col = find_column(df, [
-        "total", "revenue", "sales", "price", "amount", "gross",
+        "qs*rcp", "total", "revenue", "sales", "price", "amount", "gross",
         "net sales", "net total", "ext price", "extended price",
         "total price", "sale amount", "total amount"
     ])
