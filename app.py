@@ -294,7 +294,7 @@ def main():
     st.markdown("")
 
     # ── Tabs ─────────────────────────────────────────────────────────────────
-    tab_monthly, tab_weekly = st.tabs(["📅  Monthly Overview", "🗓  Weekly Drill-Down"])
+    tab_monthly, tab_weekly, tab_item = st.tabs(["📅  Monthly Overview", "🗓  Weekly Drill-Down", "🔎  Item Search"])
 
     # ════════════════════════════════════════════════════════════════════════
     # TAB 1 — MONTHLY
@@ -473,6 +473,131 @@ def main():
             st.plotly_chart(
                 horizontal_bar(week_items, "qty", top=False, n=10, title="🔻 Bottom 10 — Full Week"),
                 use_container_width=True)
+
+    # ════════════════════════════════════════════════════════════════════════
+    # TAB 3 — ITEM SEARCH
+    # ════════════════════════════════════════════════════════════════════════
+    with tab_item:
+        st.markdown('<div class="section-header">🔎 Search an Item</div>', unsafe_allow_html=True)
+
+        all_items = sorted(df["item"].unique())
+        selected_item = st.selectbox(
+            "Type or select an item",
+            options=all_items,
+            index=all_items.index("Pineapple - 18oz") if "Pineapple - 18oz" in all_items else 0,
+            label_visibility="collapsed",
+            placeholder="Start typing an item name…",
+        )
+
+        item_df = df[df["item"] == selected_item]
+
+        # ── Item summary cards ───────────────────────────────────────────
+        total_item_units = int(item_df["qty"].sum())
+        total_item_rev   = item_df["rev"].sum()
+        avg_price        = (item_df["rev"] / item_df["qty"].replace(0, pd.NA)).mean()
+
+        item_monthly = (
+            item_df.groupby(["month_num", "month_label"])
+                   .agg(qty=("qty", "sum"), rev=("rev", "sum"))
+                   .reset_index()
+                   .sort_values("month_num")
+        )
+
+        best_item_month     = item_monthly.loc[item_monthly["qty"].idxmax(), "month_label"]
+        best_item_month_qty = int(item_monthly["qty"].max())
+        best_item_month_rev = item_monthly["rev"].max()
+
+        ic1, ic2, ic3, ic4 = st.columns(4)
+        ic1.markdown(f"""<div class="metric-card">
+            <div class="metric-label">Total Units Sold</div>
+            <div class="metric-value">{total_item_units:,}</div>
+            <div class="metric-sub">All time</div></div>""", unsafe_allow_html=True)
+        ic2.markdown(f"""<div class="metric-card">
+            <div class="metric-label">Total Revenue</div>
+            <div class="metric-value">${total_item_rev:,.2f}</div>
+            <div class="metric-sub">All time</div></div>""", unsafe_allow_html=True)
+        ic3.markdown(f"""<div class="metric-card gold">
+            <div class="metric-label">Best Month 🏆</div>
+            <div class="metric-value">{best_item_month}</div>
+            <div class="metric-sub-gold">{best_item_month_qty:,} units · ${best_item_month_rev:,.2f}</div></div>""",
+            unsafe_allow_html=True)
+        ic4.markdown(f"""<div class="metric-card">
+            <div class="metric-label">Avg. Unit Price</div>
+            <div class="metric-value">${avg_price:.2f}</div>
+            <div class="metric-sub">Across all sales</div></div>""", unsafe_allow_html=True)
+
+        st.markdown("")
+
+        # ── Monthly chart for this item ──────────────────────────────────
+        st.markdown(
+            f'<div class="section-header">📈 {selected_item} — Monthly Sales</div>',
+            unsafe_allow_html=True)
+
+        fig_item = make_subplots(specs=[[{"secondary_y": True}]])
+        fig_item.add_trace(go.Bar(
+            x=item_monthly["month_label"],
+            y=item_monthly["qty"],
+            name="Units Sold",
+            marker_color=[
+                "#f59e0b" if m == best_item_month else "#5eead4"
+                for m in item_monthly["month_label"]
+            ],
+            hovertemplate="%{x}<br>Units: %{y:,}<extra></extra>",
+        ), secondary_y=False)
+        fig_item.add_trace(go.Scatter(
+            x=item_monthly["month_label"],
+            y=item_monthly["rev"],
+            name="Revenue ($)",
+            line=dict(color="#f87171", width=3),
+            mode="lines+markers",
+            marker=dict(size=8),
+            hovertemplate="%{x}<br>Revenue: $%{y:,.2f}<extra></extra>",
+        ), secondary_y=True)
+        fig_item.update_layout(
+            paper_bgcolor="#1e2130", plot_bgcolor="#1e2130",
+            font=dict(color="#c7d0e8"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                        xanchor="right", x=1, bgcolor="rgba(0,0,0,0)"),
+            margin=dict(l=20, r=20, t=40, b=20),
+            hovermode="x unified", bargap=0.35,
+        )
+        fig_item.update_yaxes(title_text="Units Sold", secondary_y=False,
+                              gridcolor="#2d3148", tickfont=dict(color="#8b92a9"))
+        fig_item.update_yaxes(title_text="Revenue ($)", secondary_y=True,
+                              gridcolor="rgba(0,0,0,0)", tickprefix="$",
+                              tickfont=dict(color="#f87171"))
+        fig_item.update_xaxes(gridcolor="#2d3148", tickfont=dict(color="#8b92a9"))
+        st.plotly_chart(fig_item, use_container_width=True)
+
+        # ── Month-by-month breakdown table ───────────────────────────────
+        st.markdown(
+            f'<div class="section-header">📋 Month-by-Month Breakdown</div>',
+            unsafe_allow_html=True)
+
+        tbl = item_monthly.copy()
+        tbl["Avg. Price"] = (tbl["rev"] / tbl["qty"].replace(0, pd.NA)).map("${:.2f}".format)
+        tbl["Revenue"]    = tbl["rev"].map("${:,.2f}".format)
+        tbl["Units Sold"] = tbl["qty"].map("{:,.0f}".format)
+        tbl["Best Month"] = tbl["month_label"].apply(lambda m: "🏆" if m == best_item_month else "")
+        tbl = tbl[["month_label", "Units Sold", "Revenue", "Avg. Price", "Best Month"]].rename(
+            columns={"month_label": "Month"}).reset_index(drop=True)
+        tbl.index += 1
+        st.dataframe(tbl, use_container_width=True, height=min(80 + len(tbl) * 40, 420))
+
+        # ── Week-by-week trend for this item ─────────────────────────────
+        with st.expander("📆 See week-by-week breakdown"):
+            item_weekly = (
+                item_df.groupby("week_start")
+                       .agg(qty=("qty", "sum"), rev=("rev", "sum"))
+                       .reset_index()
+                       .sort_values("week_start")
+            )
+            item_weekly["Week"] = item_weekly["week_start"].dt.strftime("Week of %b %-d, %Y")
+            item_weekly["Units Sold"] = item_weekly["qty"].map("{:,.0f}".format)
+            item_weekly["Revenue"]    = item_weekly["rev"].map("${:,.2f}".format)
+            out = item_weekly[["Week", "Units Sold", "Revenue"]].reset_index(drop=True)
+            out.index += 1
+            st.dataframe(out, use_container_width=True, height=min(80 + len(out) * 40, 360))
 
     st.caption(
         f"SnowFruit Store 327 · {len(frames)} file(s) loaded · "
