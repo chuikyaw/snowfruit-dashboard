@@ -179,50 +179,25 @@ def item_chart(im, best):
     return fig
 
 def item_daily_trend_chart(daily_df):
-    """Line + bar combo: bars = daily units sold, line = daily gross revenue."""
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    """Bar chart: daily units sold across the full date range."""
+    fig = go.Figure()
 
-    # Bar: units sold per day
     fig.add_trace(go.Bar(
         x=daily_df["date"], y=daily_df["qty"],
         name="Units Sold",
-        marker_color="rgba(94,234,212,0.35)",
-        hovertemplate="%{x|%b %d, %Y}<br>Units: %{y:,}<extra></extra>"),
-        secondary_y=False)
-
-    # Line: gross revenue per day
-    fig.add_trace(go.Scatter(
-        x=daily_df["date"], y=daily_df["rev"],
-        name="Gross Revenue",
-        mode="lines+markers",
-        line=dict(color="#2d6b8a", width=2),
-        marker=dict(size=4, color="#2d6b8a"),
-        hovertemplate="%{x|%b %d, %Y}<br>Gross: $%{y:,.2f}<extra></extra>"),
-        secondary_y=True)
-
-    # Line: net profit per day
-    fig.add_trace(go.Scatter(
-        x=daily_df["date"], y=daily_df["rev"]*NET_RATE,
-        name="Net Profit (after 40%)",
-        mode="lines",
-        line=dict(color="#22c55e", width=2, dash="dot"),
-        hovertemplate="%{x|%b %d, %Y}<br>Net: $%{y:,.2f}<extra></extra>"),
-        secondary_y=True)
+        marker_color="rgba(94,234,212,0.55)",
+        hovertemplate="%{x|%b %d, %Y}<br>Units: %{y:,}<extra></extra>"))
 
     fig.update_layout(
         paper_bgcolor="#1e2130", plot_bgcolor="#1e2130",
         font=dict(color="#c7d0e8"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02,
-                    xanchor="right", x=1, bgcolor="rgba(0,0,0,0)"),
-        margin=dict(l=20,r=20,t=40,b=20),
+        showlegend=False,
+        margin=dict(l=20,r=20,t=20,b=20),
         hovermode="x unified",
         height=360,
         bargap=0.2)
 
-    fig.update_yaxes(title_text="Units Sold", secondary_y=False,
-                     gridcolor="#2d3148", tickfont=dict(color="#8b92a9"))
-    fig.update_yaxes(title_text="Revenue ($)", secondary_y=True,
-                     gridcolor="rgba(0,0,0,0)", tickprefix="$",
+    fig.update_yaxes(title_text="Units Sold", gridcolor="#2d3148",
                      tickfont=dict(color="#8b92a9"))
     fig.update_xaxes(gridcolor="#2d3148", tickfont=dict(color="#8b92a9"))
     return fig
