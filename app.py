@@ -178,6 +178,55 @@ def item_chart(im, best):
     fig.update_xaxes(gridcolor="#2d3148", tickfont=dict(color="#8b92a9"))
     return fig
 
+def item_daily_trend_chart(daily_df):
+    """Line + bar combo: bars = daily units sold, line = daily gross revenue."""
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    # Bar: units sold per day
+    fig.add_trace(go.Bar(
+        x=daily_df["date"], y=daily_df["qty"],
+        name="Units Sold",
+        marker_color="rgba(94,234,212,0.35)",
+        hovertemplate="%{x|%b %d, %Y}<br>Units: %{y:,}<extra></extra>"),
+        secondary_y=False)
+
+    # Line: gross revenue per day
+    fig.add_trace(go.Scatter(
+        x=daily_df["date"], y=daily_df["rev"],
+        name="Gross Revenue",
+        mode="lines+markers",
+        line=dict(color="#2d6b8a", width=2),
+        marker=dict(size=4, color="#2d6b8a"),
+        hovertemplate="%{x|%b %d, %Y}<br>Gross: $%{y:,.2f}<extra></extra>"),
+        secondary_y=True)
+
+    # Line: net profit per day
+    fig.add_trace(go.Scatter(
+        x=daily_df["date"], y=daily_df["rev"]*NET_RATE,
+        name="Net Profit (after 40%)",
+        mode="lines",
+        line=dict(color="#22c55e", width=2, dash="dot"),
+        hovertemplate="%{x|%b %d, %Y}<br>Net: $%{y:,.2f}<extra></extra>"),
+        secondary_y=True)
+
+    fig.update_layout(
+        paper_bgcolor="#1e2130", plot_bgcolor="#1e2130",
+        font=dict(color="#c7d0e8"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                    xanchor="right", x=1, bgcolor="rgba(0,0,0,0)"),
+        margin=dict(l=20,r=20,t=40,b=20),
+        hovermode="x unified",
+        height=360,
+        bargap=0.2)
+
+    fig.update_yaxes(title_text="Units Sold", secondary_y=False,
+                     gridcolor="#2d3148", tickfont=dict(color="#8b92a9"))
+    fig.update_yaxes(title_text="Revenue ($)", secondary_y=True,
+                     gridcolor="rgba(0,0,0,0)", tickprefix="$",
+                     tickfont=dict(color="#8b92a9"))
+    fig.update_xaxes(gridcolor="#2d3148", tickfont=dict(color="#8b92a9"))
+    return fig
+
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main():
     st.markdown("""
@@ -471,6 +520,30 @@ def main():
 
         section(sel_item+" - Monthly Sales")
         st.plotly_chart(item_chart(item_monthly, best_im), use_container_width=True)
+
+        # ── Daily trend chart (new) ───────────────────────────────────────────
+        section(sel_item+" - Daily Sales Trend (Full Year)")
+        item_daily = (item_df.groupby("date")
+                             .agg(qty=("qty","sum"), rev=("rev","sum"))
+                             .reset_index().sort_values("date"))
+
+        # Summary stats for the trend section
+        peak_day     = item_daily.loc[item_daily["qty"].idxmax()]
+        peak_day_str = pd.Timestamp(peak_day["date"]).strftime("%b %d, %Y")
+        zero_days    = int((item_daily["qty"] == 0).sum())
+        active_days  = len(item_daily) - zero_days
+        avg_daily    = item_daily["qty"].mean()
+
+        td1,td2,td3 = st.columns(3)
+        td1.markdown(mc("Peak Day",       peak_day_str,
+                        f"{int(peak_day['qty']):,} units · ${peak_day['rev']:,.2f}","gold"),  unsafe_allow_html=True)
+        td2.markdown(mc("Active Days",    str(active_days),
+                        f"Days with at least 1 sale"),                                         unsafe_allow_html=True)
+        td3.markdown(mc("Avg. Daily Units", f"{avg_daily:.1f}",
+                        "On days with sales"),                                                 unsafe_allow_html=True)
+        st.markdown("")
+
+        st.plotly_chart(item_daily_trend_chart(item_daily), use_container_width=True)
 
         section("Month-by-Month Breakdown")
         tbl = item_monthly.copy()
