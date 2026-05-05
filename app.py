@@ -80,21 +80,27 @@ def section(title):
 
 # ── Charts ─────────────────────────────────────────────────────────────────────
 def monthly_trend_chart(mdf, sel):
-    # Grouped bars: Gross (blue/gold highlight) + Net Profit (green), no lines
     gross_colors  = ["#f59e0b" if r.month_label == sel else "#2d6b8a" for _,r in mdf.iterrows()]
     profit_colors = ["#16a34a" if r.month_label == sel else "#22c55e" for _,r in mdf.iterrows()]
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=mdf["month_label"], y=mdf["rev"],
-                         name="Gross Revenue", marker_color=gross_colors,
-                         hovertemplate="%{x}<br>Gross: $%{y:,.2f}<extra></extra>"))
-    fig.add_trace(go.Bar(x=mdf["month_label"], y=mdf["rev"]*NET_RATE,
-                         name="Net Profit (after 40%)", marker_color=profit_colors,
-                         hovertemplate="%{x}<br>Net Profit: $%{y:,.2f}<extra></extra>"))
+    fig.add_trace(go.Bar(
+        x=mdf["month_label"], y=mdf["rev"], name="Gross Revenue",
+        marker_color=gross_colors,
+        text=["$"+f"{v:,.0f}" for v in mdf["rev"]],
+        textposition="inside", textfont=dict(color="#ffffff", size=11),
+        hovertemplate="%{x}<br>Gross: $%{y:,.2f}<extra></extra>"))
+    fig.add_trace(go.Bar(
+        x=mdf["month_label"], y=mdf["rev"]*NET_RATE, name="Net Profit (after 40%)",
+        marker_color=profit_colors,
+        text=["$"+f"{v*NET_RATE:,.0f}" for v in mdf["rev"]],
+        textposition="inside", textfont=dict(color="#ffffff", size=11),
+        hovertemplate="%{x}<br>Net Profit: $%{y:,.2f}<extra></extra>"))
     fig.update_layout(paper_bgcolor="#1e2130", plot_bgcolor="#1e2130",
                       font=dict(color="#c7d0e8"), barmode="group", bargap=0.25, bargroupgap=0.08,
                       legend=dict(orientation="h", yanchor="bottom", y=1.02,
                                   xanchor="right", x=1, bgcolor="rgba(0,0,0,0)"),
-                      margin=dict(l=20,r=20,t=40,b=20), hovermode="x unified")
+                      margin=dict(l=20,r=20,t=40,b=20), hovermode="x unified",
+                      uniformtext=dict(minsize=9, mode="hide"))
     fig.update_yaxes(title_text="Amount ($)", gridcolor="#2d3148",
                      tickprefix="$", tickfont=dict(color="#8b92a9"))
     fig.update_xaxes(gridcolor="#2d3148", tickfont=dict(color="#8b92a9"))
@@ -119,38 +125,49 @@ def h_bar(idf, col, top=True, n=10, title=""):
     return fig
 
 def daily_chart(ddf, sel_date):
-    # Grouped bars: Gross (teal/highlight) + Net Profit (green), no lines
     xlabels       = [r.date.strftime("%a\n%b %d") for _,r in ddf.iterrows()]
     gross_colors  = ["#f59e0b" if r.date == sel_date else "#2d6b8a" for _,r in ddf.iterrows()]
     profit_colors = ["#16a34a" if r.date == sel_date else "#22c55e" for _,r in ddf.iterrows()]
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=xlabels, y=ddf["rev"], name="Gross Revenue",
-                         marker_color=gross_colors,
-                         hovertemplate="%{x}<br>Gross: $%{y:,.2f}<extra></extra>"))
-    fig.add_trace(go.Bar(x=xlabels, y=ddf["rev"]*NET_RATE, name="Net Profit (after 40%)",
-                         marker_color=profit_colors,
-                         hovertemplate="%{x}<br>Net Profit: $%{y:,.2f}<extra></extra>"))
+    fig.add_trace(go.Bar(
+        x=xlabels, y=ddf["rev"], name="Gross Revenue",
+        marker_color=gross_colors,
+        text=["$"+f"{v:,.0f}" for v in ddf["rev"]],
+        textposition="inside", textfont=dict(color="#ffffff", size=11),
+        hovertemplate="%{x}<br>Gross: $%{y:,.2f}<extra></extra>"))
+    fig.add_trace(go.Bar(
+        x=xlabels, y=ddf["rev"]*NET_RATE, name="Net Profit (after 40%)",
+        marker_color=profit_colors,
+        text=["$"+f"{v*NET_RATE:,.0f}" for v in ddf["rev"]],
+        textposition="inside", textfont=dict(color="#ffffff", size=11),
+        hovertemplate="%{x}<br>Net Profit: $%{y:,.2f}<extra></extra>"))
     fig.update_layout(paper_bgcolor="#1e2130", plot_bgcolor="#1e2130",
                       font=dict(color="#c7d0e8"), barmode="group", bargap=0.25, bargroupgap=0.08,
                       legend=dict(orientation="h", yanchor="bottom", y=1.02,
                                   xanchor="right", x=1, bgcolor="rgba(0,0,0,0)"),
-                      margin=dict(l=20,r=20,t=40,b=20), hovermode="x unified")
+                      margin=dict(l=20,r=20,t=40,b=20), hovermode="x unified",
+                      uniformtext=dict(minsize=9, mode="hide"))
     fig.update_yaxes(title_text="Amount ($)", gridcolor="#2d3148",
                      tickprefix="$", tickfont=dict(color="#8b92a9"))
     fig.update_xaxes(gridcolor="#2d3148", tickfont=dict(color="#8b92a9"))
     return fig
 
 def item_chart(im, best):
-    # Grouped bars: Gross (blue/gold highlight) + Net Profit (green), no lines
     gross_colors  = ["#f59e0b" if m==best else "#2d6b8a" for m in im["month_label"]]
     profit_colors = ["#16a34a" if m==best else "#22c55e" for m in im["month_label"]]
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=im["month_label"], y=im["rev"],
-                         name="Gross Revenue", marker_color=gross_colors,
-                         hovertemplate="%{x}<br>Gross: $%{y:,.2f}<extra></extra>"))
-    fig.add_trace(go.Bar(x=im["month_label"], y=im["rev"]*NET_RATE,
-                         name="Net Profit (after 40%)", marker_color=profit_colors,
-                         hovertemplate="%{x}<br>Net Profit: $%{y:,.2f}<extra></extra>"))
+    fig.add_trace(go.Bar(
+        x=im["month_label"], y=im["rev"], name="Gross Revenue",
+        marker_color=gross_colors,
+        text=["$"+f"{v:,.0f}" for v in im["rev"]],
+        textposition="inside", textfont=dict(color="#ffffff", size=11),
+        hovertemplate="%{x}<br>Gross: $%{y:,.2f}<extra></extra>"))
+    fig.add_trace(go.Bar(
+        x=im["month_label"], y=im["rev"]*NET_RATE, name="Net Profit (after 40%)",
+        marker_color=profit_colors,
+        text=["$"+f"{v*NET_RATE:,.0f}" for v in im["rev"]],
+        textposition="inside", textfont=dict(color="#ffffff", size=11),
+        hovertemplate="%{x}<br>Net Profit: $%{y:,.2f}<extra></extra>"))
     fig.update_layout(paper_bgcolor="#1e2130", plot_bgcolor="#1e2130",
                       font=dict(color="#c7d0e8"), barmode="group", bargap=0.25, bargroupgap=0.08,
                       legend=dict(orientation="h", yanchor="bottom", y=1.02,
@@ -474,14 +491,4 @@ def main():
             iw["Units Sold"]    = iw["qty"].map("{:,.0f}".format)
             iw["Gross Revenue"] = iw["rev"].map("${:,.2f}".format)
             iw["Net Profit"]    = (iw["rev"]*NET_RATE).map("${:,.2f}".format)
-            out = iw[["Week","Units Sold","Gross Revenue","Net Profit"]].reset_index(drop=True)
-            out.index += 1
-            st.dataframe(out, use_container_width=True, height=min(80+len(out)*40,360))
-
-    st.caption("SnowFruit Store 327 - "+f"{len(df):,}"+" transactions - "+
-               df["date"].min().strftime("%b %d")+" to "+
-               df["date"].max().strftime("%b %d, %Y")+
-               f" | Franchise fee: {int(FRANCHISE_FEE*100)}% | Net rate: {int(NET_RATE*100)}%")
-
-if __name__ == "__main__":
-    main()
+            out = iw
