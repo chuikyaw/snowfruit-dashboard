@@ -2,10 +2,11 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import datetime
 from pathlib import Path
 
-DATA_FILE = Path("data/sales_data.parquet")
+DATA_FILE     = Path("data/sales_data.parquet")
+FRANCHISE_FEE = 0.40          # 40% deducted — change here if rate changes
+NET_RATE      = 1 - FRANCHISE_FEE
 
 st.set_page_config(page_title="SnowFruit Sales Dashboard", page_icon="🍍",
                    layout="wide", initial_sidebar_state="auto")
@@ -16,11 +17,13 @@ st.markdown("""
     h1, h2, h3 { color: #ffffff; }
     .metric-card { background:#1e2130;border-radius:12px;padding:18px 22px;
                    border:1px solid #2d3148;height:100%; }
-    .metric-card.gold { border-color: #f59e0b; }
+    .metric-card.gold   { border-color: #f59e0b; }
+    .metric-card.green  { border-color: #22c55e; }
     .metric-label { color:#8b92a9;font-size:12px;text-transform:uppercase;letter-spacing:1px; }
     .metric-value { color:#ffffff;font-size:26px;font-weight:700;margin-top:4px; }
-    .metric-sub      { color:#5eead4;font-size:13px;margin-top:2px; }
-    .metric-sub-gold { color:#f59e0b;font-size:13px;margin-top:2px; }
+    .metric-sub       { color:#5eead4;font-size:13px;margin-top:2px; }
+    .metric-sub-gold  { color:#f59e0b;font-size:13px;margin-top:2px; }
+    .metric-sub-green { color:#22c55e;font-size:13px;margin-top:2px; }
     .section-header { color:#c7d0e8;font-size:15px;font-weight:600;
         text-transform:uppercase;letter-spacing:1.2px;
         margin:24px 0 12px 0;border-bottom:1px solid #2d3148;padding-bottom:6px; }
@@ -62,9 +65,12 @@ def parse_file(file):
 def sun_week_start(dates):
     return dates - pd.to_timedelta((dates.dt.dayofweek + 1) % 7, unit="d")
 
-def mc(label, value, sub, gold=False):
-    cls = "metric-card gold" if gold else "metric-card"
-    sc  = "metric-sub-gold" if gold else "metric-sub"
+def net(revenue):
+    return revenue * NET_RATE
+
+def mc(label, value, sub, style=""):
+    cls = "metric-card " + style if style else "metric-card"
+    sc  = "metric-sub-gold" if style=="gold" else ("metric-sub-green" if style=="green" else "metric-sub")
     return (f'<div class="{cls}"><div class="metric-label">{label}</div>'
             f'<div class="metric-value">{value}</div>'
             f'<div class="{sc}">{sub}</div></div>')
@@ -76,22 +82,28 @@ def section(title):
 def monthly_trend_chart(mdf, sel):
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     colors = ["#f59e0b" if r.month_label == sel else "#2d6b8a" for _,r in mdf.iterrows()]
-    fig.add_trace(go.Bar(x=mdf["month_label"], y=mdf["rev"], name="Revenue ($)",
+    fig.add_trace(go.Bar(x=mdf["month_label"], y=mdf["rev"], name="Gross Revenue",
                          marker_color=colors,
-                         hovertemplate="%{x}<br>Revenue: $%{y:,.2f}<extra></extra>"),
+                         hovertemplate="%{x}<br>Gross: $%{y:,.2f}<extra></extra>"),
+                  secondary_y=False)
+    fig.add_trace(go.Scatter(x=mdf["month_label"], y=mdf["rev"]*NET_RATE,
+                             name="Net Profit (after 40%)",
+                             line=dict(color="#22c55e", width=3, dash="dot"),
+                             mode="lines+markers", marker=dict(size=8),
+                             hovertemplate="%{x}<br>Net Profit: $%{y:,.2f}<extra></extra>"),
                   secondary_y=False)
     fig.add_trace(go.Scatter(x=mdf["month_label"], y=mdf["qty"], name="Units Sold",
-                             line=dict(color="#5eead4",width=3), mode="lines+markers",
-                             marker=dict(size=8),
+                             line=dict(color="#5eead4", width=2),
+                             mode="lines+markers", marker=dict(size=7),
                              hovertemplate="%{x}<br>Units: %{y:,}<extra></extra>"),
                   secondary_y=True)
     fig.update_layout(paper_bgcolor="#1e2130", plot_bgcolor="#1e2130",
                       font=dict(color="#c7d0e8"),
-                      legend=dict(orientation="h",yanchor="bottom",y=1.02,
-                                  xanchor="right",x=1,bgcolor="rgba(0,0,0,0)"),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                                  xanchor="right", x=1, bgcolor="rgba(0,0,0,0)"),
                       margin=dict(l=20,r=20,t=40,b=20),
                       hovermode="x unified", bargap=0.35)
-    fig.update_yaxes(title_text="Revenue ($)", secondary_y=False,
+    fig.update_yaxes(title_text="Revenue / Profit ($)", secondary_y=False,
                      gridcolor="#2d3148", tickprefix="$", tickfont=dict(color="#8b92a9"))
     fig.update_yaxes(title_text="Units Sold", secondary_y=True,
                      gridcolor="rgba(0,0,0,0)", tickfont=dict(color="#5eead4"))
@@ -105,8 +117,8 @@ def h_bar(idf, col, top=True, n=10, title=""):
     fig = go.Figure(go.Bar(
         x=d[col], y=d["item"], orientation="h",
         marker_color="#5eead4" if top else "#f87171",
-        customdata=d["rev"] if "rev" in d.columns else d[col],
-        hovertemplate="<b>%{y}</b><br>Units: %{x:,}<br>Revenue: $%{customdata:,.2f}<extra></extra>",
+        customdata=list(zip(d["rev"], d["rev"]*NET_RATE)) if "rev" in d.columns else list(zip(d[col],d[col])),
+        hovertemplate="<b>%{y}</b><br>Units: %{x:,}<br>Gross: $%{customdata[0]:,.2f}<br>Net Profit: $%{customdata[1]:,.2f}<extra></extra>",
     ))
     fig.update_layout(title=dict(text=title, font=dict(color="#c7d0e8",size=14)),
                       paper_bgcolor="#1e2130", plot_bgcolor="#1e2130",
@@ -124,20 +136,25 @@ def daily_chart(ddf, sel_date):
                          marker_color=colors,
                          hovertemplate="%{x}<br>Units: %{y:,}<extra></extra>"),
                   secondary_y=False)
-    fig.add_trace(go.Scatter(x=xlabels, y=ddf["rev"], name="Revenue ($)",
-                             line=dict(color="#f59e0b",width=3), mode="lines+markers",
-                             marker=dict(size=8),
-                             hovertemplate="%{x}<br>Revenue: $%{y:,.2f}<extra></extra>"),
+    fig.add_trace(go.Scatter(x=xlabels, y=ddf["rev"], name="Gross Revenue",
+                             line=dict(color="#f59e0b", width=3),
+                             mode="lines+markers", marker=dict(size=8),
+                             hovertemplate="%{x}<br>Gross: $%{y:,.2f}<extra></extra>"),
+                  secondary_y=True)
+    fig.add_trace(go.Scatter(x=xlabels, y=ddf["rev"]*NET_RATE, name="Net Profit",
+                             line=dict(color="#22c55e", width=2, dash="dot"),
+                             mode="lines+markers", marker=dict(size=7),
+                             hovertemplate="%{x}<br>Net Profit: $%{y:,.2f}<extra></extra>"),
                   secondary_y=True)
     fig.update_layout(paper_bgcolor="#1e2130", plot_bgcolor="#1e2130",
                       font=dict(color="#c7d0e8"),
-                      legend=dict(orientation="h",yanchor="bottom",y=1.02,
-                                  xanchor="right",x=1,bgcolor="rgba(0,0,0,0)"),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                                  xanchor="right", x=1, bgcolor="rgba(0,0,0,0)"),
                       margin=dict(l=20,r=20,t=40,b=20),
                       hovermode="x unified", bargap=0.35)
     fig.update_yaxes(title_text="Units Sold", secondary_y=False,
                      gridcolor="#2d3148", tickfont=dict(color="#8b92a9"))
-    fig.update_yaxes(title_text="Revenue ($)", secondary_y=True,
+    fig.update_yaxes(title_text="Revenue / Profit ($)", secondary_y=True,
                      gridcolor="rgba(0,0,0,0)", tickprefix="$",
                      tickfont=dict(color="#f59e0b"))
     fig.update_xaxes(gridcolor="#2d3148", tickfont=dict(color="#8b92a9"))
@@ -150,20 +167,25 @@ def item_chart(im, best):
                                        for m in im["month_label"]],
                          hovertemplate="%{x}<br>Units: %{y:,}<extra></extra>"),
                   secondary_y=False)
-    fig.add_trace(go.Scatter(x=im["month_label"], y=im["rev"], name="Revenue ($)",
-                             line=dict(color="#f87171",width=3), mode="lines+markers",
-                             marker=dict(size=8),
-                             hovertemplate="%{x}<br>Revenue: $%{y:,.2f}<extra></extra>"),
+    fig.add_trace(go.Scatter(x=im["month_label"], y=im["rev"], name="Gross Revenue",
+                             line=dict(color="#f87171", width=3),
+                             mode="lines+markers", marker=dict(size=8),
+                             hovertemplate="%{x}<br>Gross: $%{y:,.2f}<extra></extra>"),
+                  secondary_y=True)
+    fig.add_trace(go.Scatter(x=im["month_label"], y=im["rev"]*NET_RATE, name="Net Profit",
+                             line=dict(color="#22c55e", width=2, dash="dot"),
+                             mode="lines+markers", marker=dict(size=7),
+                             hovertemplate="%{x}<br>Net Profit: $%{y:,.2f}<extra></extra>"),
                   secondary_y=True)
     fig.update_layout(paper_bgcolor="#1e2130", plot_bgcolor="#1e2130",
                       font=dict(color="#c7d0e8"),
-                      legend=dict(orientation="h",yanchor="bottom",y=1.02,
-                                  xanchor="right",x=1,bgcolor="rgba(0,0,0,0)"),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                                  xanchor="right", x=1, bgcolor="rgba(0,0,0,0)"),
                       margin=dict(l=20,r=20,t=40,b=20),
                       hovermode="x unified", bargap=0.35)
     fig.update_yaxes(title_text="Units Sold", secondary_y=False,
                      gridcolor="#2d3148", tickfont=dict(color="#8b92a9"))
-    fig.update_yaxes(title_text="Revenue ($)", secondary_y=True,
+    fig.update_yaxes(title_text="Revenue / Profit ($)", secondary_y=True,
                      gridcolor="rgba(0,0,0,0)", tickprefix="$",
                      tickfont=dict(color="#f87171"))
     fig.update_xaxes(gridcolor="#2d3148", tickfont=dict(color="#8b92a9"))
@@ -205,6 +227,7 @@ def main():
             if pin_input and not correct_pin:
                 st.error("Incorrect PIN")
         st.markdown("---")
+        st.caption(f"Franchise fee: {int(FRANCHISE_FEE*100)}%\nNet rate: {int(NET_RATE*100)}%")
         st.caption("To save permanently:\nrun update_data.py,\nthen upload parquet to GitHub.")
 
     # Load data
@@ -245,30 +268,35 @@ def main():
     # Derived columns
     df["month_num"]  = df["date"].dt.month
     df["month_label"]= df["date"].dt.strftime("%b")
-    df["week_start"] = sun_week_start(df["date"])   # Sun-Sat weeks
+    df["week_start"] = sun_week_start(df["date"])
 
     # YTD metrics
     total_rev    = df["rev"].sum()
+    total_profit = net(total_rev)
     total_units  = int(df["qty"].sum())
     unique_items = df["item"].nunique()
     months_seen  = df["month_label"].nunique()
     monthly_agg  = (df.groupby(["month_num","month_label"])
-                      .agg(rev=("rev","sum"),qty=("qty","sum"))
+                      .agg(rev=("rev","sum"), qty=("qty","sum"))
                       .reset_index().sort_values("month_num"))
+    monthly_agg["profit"] = net(monthly_agg["rev"])
+
     best_month_row  = monthly_agg.loc[monthly_agg["rev"].idxmax()]
     best_month_name = best_month_row["month_label"]
     best_month_rev  = best_month_row["rev"]
     top_item_ytd    = df.groupby("item")["qty"].sum().idxmax()
     top_item_qty    = int(df.groupby("item")["qty"].sum().max())
 
-    c1,c2,c3,c4,c5 = st.columns(5)
-    c1.markdown(mc("YTD Revenue",    f"${total_rev:,.2f}",  f"{months_seen} months"),        unsafe_allow_html=True)
-    c2.markdown(mc("YTD Units Sold", f"{total_units:,}",    f"{unique_items} unique items"),  unsafe_allow_html=True)
-    c3.markdown(mc("Best Month",     best_month_name,       f"${best_month_rev:,.2f}",True),  unsafe_allow_html=True)
-    c4.markdown(mc("Top Item YTD",   top_item_ytd[:20],     f"{top_item_qty:,} units sold"),  unsafe_allow_html=True)
-    c5.markdown(mc("Data Range",
+    # YTD summary row
+    c1,c2,c3,c4,c5,c6 = st.columns(6)
+    c1.markdown(mc("YTD Gross Revenue", f"${total_rev:,.2f}",   f"{months_seen} months"),              unsafe_allow_html=True)
+    c2.markdown(mc("YTD Net Profit",    f"${total_profit:,.2f}", f"After {int(FRANCHISE_FEE*100)}% fee", "green"), unsafe_allow_html=True)
+    c3.markdown(mc("YTD Units Sold",    f"{total_units:,}",      f"{unique_items} unique items"),        unsafe_allow_html=True)
+    c4.markdown(mc("Best Month",        best_month_name,         f"${best_month_rev:,.2f} gross", "gold"), unsafe_allow_html=True)
+    c5.markdown(mc("Top Item YTD",      top_item_ytd[:20],       f"{top_item_qty:,} units sold"),        unsafe_allow_html=True)
+    c6.markdown(mc("Data Range",
                    df["date"].min().strftime("%b %d"),
-                   "to "+df["date"].max().strftime("%b %d, %Y")),                             unsafe_allow_html=True)
+                   "to "+df["date"].max().strftime("%b %d, %Y")),                                       unsafe_allow_html=True)
     st.markdown("")
 
     tab_monthly, tab_weekly, tab_item = st.tabs([
@@ -276,7 +304,7 @@ def main():
 
     # ── TAB 1: MONTHLY ────────────────────────────────────────────────────────
     with tab_monthly:
-        section("Revenue & Units by Month")
+        section("Gross Revenue, Net Profit & Units by Month")
         avail_months = monthly_agg["month_label"].tolist()
         if ("selected_month" not in st.session_state or
                 st.session_state.selected_month not in avail_months):
@@ -284,7 +312,9 @@ def main():
         month_cols = st.columns(len(avail_months))
         for col, row in zip(month_cols, monthly_agg.itertuples()):
             pfx   = "🏆 " if row.month_label == best_month_name else ""
-            label = f"**{pfx}{row.month_label}**  \n${row.rev:,.0f}  \n{int(row.qty):,} units"
+            label = (f"**{pfx}{row.month_label}**  \n"
+                     f"${row.rev:,.0f} gross  \n"
+                     f"${row.profit:,.0f} net")
             if col.button(label, key="m_"+row.month_label, use_container_width=True):
                 st.session_state.selected_month = row.month_label
         sel_month = st.session_state.selected_month
@@ -293,36 +323,45 @@ def main():
         section(sel_month+" - Top & Bottom Sellers")
         month_df    = df[df["month_label"]==sel_month]
         month_items = month_df.groupby("item").agg(qty=("qty","sum"),rev=("rev","sum")).reset_index()
-        mk1,mk2,mk3 = st.columns(3)
-        mk1.markdown(mc("Revenue",       f"${month_df['rev'].sum():,.2f}", sel_month),           unsafe_allow_html=True)
-        mk2.markdown(mc("Units Sold",    f"{int(month_df['qty'].sum()):,}",
-                        f"{month_df['item'].nunique()} unique items"),                            unsafe_allow_html=True)
-        mk3.markdown(mc("Weeks of Data", str(month_df["week_start"].nunique()),
+        month_items["profit"] = net(month_items["rev"])
+        m_gross  = month_df["rev"].sum()
+        m_profit = net(m_gross)
+
+        mk1,mk2,mk3,mk4 = st.columns(4)
+        mk1.markdown(mc("Gross Revenue", f"${m_gross:,.2f}",   sel_month),                             unsafe_allow_html=True)
+        mk2.markdown(mc("Net Profit",    f"${m_profit:,.2f}",  f"After {int(FRANCHISE_FEE*100)}% fee", "green"), unsafe_allow_html=True)
+        mk3.markdown(mc("Units Sold",    f"{int(month_df['qty'].sum()):,}",
+                        f"{month_df['item'].nunique()} unique items"),                                  unsafe_allow_html=True)
+        mk4.markdown(mc("Weeks of Data", str(month_df["week_start"].nunique()),
                         month_df["date"].min().strftime("%b %d")+" - "+
-                        month_df["date"].max().strftime("%b %d")),                               unsafe_allow_html=True)
+                        month_df["date"].max().strftime("%b %d")),                                      unsafe_allow_html=True)
         st.markdown("")
         lc,rc = st.columns(2)
         with lc:
-            st.plotly_chart(h_bar(month_items,"qty",top=True, n=10,title="Top 10 Items - "+sel_month),use_container_width=True)
+            st.plotly_chart(h_bar(month_items,"qty",top=True, n=10,title="Top 10 Items - "+sel_month),    use_container_width=True)
         with rc:
-            st.plotly_chart(h_bar(month_items,"qty",top=False,n=10,title="Bottom 10 Items - "+sel_month),use_container_width=True)
+            st.plotly_chart(h_bar(month_items,"qty",top=False,n=10,title="Bottom 10 Items - "+sel_month), use_container_width=True)
+
         with st.expander("Full item list for "+sel_month):
             tbl = (month_items.sort_values("qty",ascending=False)
-                              .rename(columns={"item":"Item","qty":"Units Sold","rev":"Revenue"})
+                              .rename(columns={"item":"Item","qty":"Units Sold",
+                                               "rev":"Gross Revenue","profit":"Net Profit"})
                               .reset_index(drop=True))
             tbl.index += 1
-            tbl["Revenue"]    = tbl["Revenue"].map("${:,.2f}".format)
-            tbl["Units Sold"] = tbl["Units Sold"].map("{:,.0f}".format)
+            tbl["Gross Revenue"] = tbl["Gross Revenue"].map("${:,.2f}".format)
+            tbl["Net Profit"]    = tbl["Net Profit"].map("${:,.2f}".format)
+            tbl["Units Sold"]    = tbl["Units Sold"].map("{:,.0f}".format)
             st.dataframe(tbl, use_container_width=True, height=320)
 
         section("Month-by-Month Comparison")
         comp = monthly_agg.copy()
-        comp["Revenue"]    = comp["rev"].map("${:,.2f}".format)
-        comp["Units Sold"] = comp["qty"].map("{:,.0f}".format)
-        comp["vs. Best"]   = ((monthly_agg["rev"]/best_month_rev-1)*100).map(
+        comp["Gross Revenue"] = comp["rev"].map("${:,.2f}".format)
+        comp["Net Profit"]    = comp["profit"].map("${:,.2f}".format)
+        comp["Units Sold"]    = comp["qty"].map("{:,.0f}".format)
+        comp["vs. Best"]      = ((monthly_agg["rev"]/best_month_rev-1)*100).map(
             lambda x: ("+") if x>=0 else "")+((monthly_agg["rev"]/best_month_rev-1)*100).map(
             lambda x: f"{x:.1f}%")
-        comp = (comp[["month_label","Revenue","Units Sold","vs. Best"]]
+        comp = (comp[["month_label","Gross Revenue","Net Profit","Units Sold","vs. Best"]]
                 .rename(columns={"month_label":"Month"}).reset_index(drop=True))
         comp.index += 1
         st.dataframe(comp, use_container_width=True, height=min(60+len(comp)*40,380))
@@ -359,14 +398,19 @@ def main():
                         unsafe_allow_html=True)
         st.markdown("")
 
+        w_gross  = week_df["rev"].sum()
+        w_profit = net(w_gross)
         best_day = week_df.groupby("date")["rev"].sum().idxmax()
-        wk1,wk2,wk3 = st.columns(3)
-        wk1.markdown(mc("Week Revenue", f"${week_df['rev'].sum():,.2f}",
-                        w_start_str+" - "+w_end_str),                                           unsafe_allow_html=True)
-        wk2.markdown(mc("Units Sold",   f"{int(week_df['qty'].sum()):,}",
-                        f"{week_df['item'].nunique()} unique items"),                            unsafe_allow_html=True)
-        wk3.markdown(mc("Best Day",     pd.Timestamp(best_day).strftime("%A"),
-                        "$"+f"{week_df.groupby('date')['rev'].sum().max():,.2f}"),              unsafe_allow_html=True)
+
+        wk1,wk2,wk3,wk4 = st.columns(4)
+        wk1.markdown(mc("Gross Revenue", f"${w_gross:,.2f}",
+                        w_start_str+" - "+w_end_str),                                                   unsafe_allow_html=True)
+        wk2.markdown(mc("Net Profit",    f"${w_profit:,.2f}",
+                        f"After {int(FRANCHISE_FEE*100)}% fee", "green"),                               unsafe_allow_html=True)
+        wk3.markdown(mc("Units Sold",    f"{int(week_df['qty'].sum()):,}",
+                        f"{week_df['item'].nunique()} unique items"),                                    unsafe_allow_html=True)
+        wk4.markdown(mc("Best Day",      pd.Timestamp(best_day).strftime("%A"),
+                        "$"+f"{week_df.groupby('date')['rev'].sum().max():,.2f}"),                       unsafe_allow_html=True)
         st.markdown("")
 
         section("Daily Breakdown - Click a day")
@@ -375,10 +419,13 @@ def main():
             st.session_state.selected_date = dates_sorted[0]
         day_cols = st.columns(len(dates_sorted))
         for i,(col,d) in enumerate(zip(day_cols, dates_sorted)):
-            day_rev = week_df[week_df["date"]==d]["rev"].sum()
-            day_qty = int(week_df[week_df["date"]==d]["qty"].sum())
-            ts      = pd.Timestamp(d)
-            day_lbl = ts.strftime("%a")+"  \n"+ts.strftime("%b %d")+"  \n$"+f"{day_rev:,.0f}"+"  \n"+f"{day_qty:,} units"
+            day_rev    = week_df[week_df["date"]==d]["rev"].sum()
+            day_profit = net(day_rev)
+            day_qty    = int(week_df[week_df["date"]==d]["qty"].sum())
+            ts         = pd.Timestamp(d)
+            day_lbl    = (ts.strftime("%a")+"  \n"+ts.strftime("%b %d")+"  \n"
+                          "$"+f"{day_rev:,.0f}"+" gross  \n"
+                          "$"+f"{day_profit:,.0f}"+" net")
             if col.button(day_lbl, key=f"wd_{i}_{str(selected_week)}", use_container_width=True):
                 st.session_state.selected_date = d
 
@@ -415,20 +462,24 @@ def main():
         item_df       = df[df["item"]==sel_item]
         total_i_units = int(item_df["qty"].sum())
         total_i_rev   = item_df["rev"].sum()
+        total_i_profit= net(total_i_rev)
         avg_price     = (item_df["rev"]/item_df["qty"].replace(0,float("nan"))).mean()
         item_monthly  = (item_df.groupby(["month_num","month_label"])
                                 .agg(qty=("qty","sum"),rev=("rev","sum"))
                                 .reset_index().sort_values("month_num"))
+        item_monthly["profit"] = net(item_monthly["rev"])
         best_im     = item_monthly.loc[item_monthly["qty"].idxmax(),"month_label"]
         best_im_qty = int(item_monthly["qty"].max())
         best_im_rev = item_monthly["rev"].max()
 
-        ic1,ic2,ic3,ic4 = st.columns(4)
-        ic1.markdown(mc("Total Units",     f"{total_i_units:,}",   "All time"),            unsafe_allow_html=True)
-        ic2.markdown(mc("Total Revenue",   f"${total_i_rev:,.2f}", "All time"),            unsafe_allow_html=True)
-        ic3.markdown(mc("Best Month",      best_im,
-                        f"{best_im_qty:,} units - ${best_im_rev:,.2f}", True),             unsafe_allow_html=True)
-        ic4.markdown(mc("Avg. Unit Price", f"${avg_price:.2f}",    "Across all sales"),    unsafe_allow_html=True)
+        ic1,ic2,ic3,ic4,ic5 = st.columns(5)
+        ic1.markdown(mc("Total Units",      f"{total_i_units:,}",    "All time"),                    unsafe_allow_html=True)
+        ic2.markdown(mc("Gross Revenue",    f"${total_i_rev:,.2f}",  "All time"),                    unsafe_allow_html=True)
+        ic3.markdown(mc("Net Profit",       f"${total_i_profit:,.2f}",
+                        f"After {int(FRANCHISE_FEE*100)}% fee", "green"),                            unsafe_allow_html=True)
+        ic4.markdown(mc("Best Month",       best_im,
+                        f"{best_im_qty:,} units - ${best_im_rev:,.2f}", "gold"),                     unsafe_allow_html=True)
+        ic5.markdown(mc("Avg. Unit Price",  f"${avg_price:.2f}",     "Across all sales"),             unsafe_allow_html=True)
         st.markdown("")
 
         section(sel_item+" - Monthly Sales")
@@ -436,11 +487,12 @@ def main():
 
         section("Month-by-Month Breakdown")
         tbl = item_monthly.copy()
-        tbl["Avg. Price"] = (tbl["rev"]/tbl["qty"].replace(0,float("nan"))).map("${:.2f}".format)
-        tbl["Revenue"]    = tbl["rev"].map("${:,.2f}".format)
-        tbl["Units Sold"] = tbl["qty"].map("{:,.0f}".format)
-        tbl["Best"]       = tbl["month_label"].apply(lambda m: "🏆" if m==best_im else "")
-        tbl = (tbl[["month_label","Units Sold","Revenue","Avg. Price","Best"]]
+        tbl["Avg. Price"]    = (tbl["rev"]/tbl["qty"].replace(0,float("nan"))).map("${:.2f}".format)
+        tbl["Gross Revenue"] = tbl["rev"].map("${:,.2f}".format)
+        tbl["Net Profit"]    = tbl["profit"].map("${:,.2f}".format)
+        tbl["Units Sold"]    = tbl["qty"].map("{:,.0f}".format)
+        tbl["Best"]          = tbl["month_label"].apply(lambda m: "🏆" if m==best_im else "")
+        tbl = (tbl[["month_label","Units Sold","Gross Revenue","Net Profit","Avg. Price","Best"]]
                .rename(columns={"month_label":"Month"}).reset_index(drop=True))
         tbl.index += 1
         st.dataframe(tbl, use_container_width=True, height=min(80+len(tbl)*40,420))
@@ -448,16 +500,18 @@ def main():
         with st.expander("Week-by-week breakdown"):
             iw = (item_df.groupby("week_start").agg(qty=("qty","sum"),rev=("rev","sum"))
                          .reset_index().sort_values("week_start"))
-            iw["Week"]       = iw["week_start"].dt.strftime("Week of %b %d, %Y")
-            iw["Units Sold"] = iw["qty"].map("{:,.0f}".format)
-            iw["Revenue"]    = iw["rev"].map("${:,.2f}".format)
-            out = iw[["Week","Units Sold","Revenue"]].reset_index(drop=True)
+            iw["Week"]          = iw["week_start"].dt.strftime("Week of %b %d, %Y")
+            iw["Units Sold"]    = iw["qty"].map("{:,.0f}".format)
+            iw["Gross Revenue"] = iw["rev"].map("${:,.2f}".format)
+            iw["Net Profit"]    = (iw["rev"]*NET_RATE).map("${:,.2f}".format)
+            out = iw[["Week","Units Sold","Gross Revenue","Net Profit"]].reset_index(drop=True)
             out.index += 1
             st.dataframe(out, use_container_width=True, height=min(80+len(out)*40,360))
 
     st.caption("SnowFruit Store 327 - "+f"{len(df):,}"+" transactions - "+
                df["date"].min().strftime("%b %d")+" to "+
-               df["date"].max().strftime("%b %d, %Y"))
+               df["date"].max().strftime("%b %d, %Y")+
+               f" | Franchise fee: {int(FRANCHISE_FEE*100)}% | Net rate: {int(NET_RATE*100)}%")
 
 if __name__ == "__main__":
     main()
