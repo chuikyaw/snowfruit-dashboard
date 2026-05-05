@@ -379,15 +379,56 @@ def main():
     # TAB 2 — WEEKLY DRILL-DOWN
     # ══════════════════════════════════════════════════════════════════════════
     with tab_weekly:
-        weeks       = sorted(df["week_start"].unique())
-        week_labels = {w: df[df["week_start"] == w]["date"].min().strftime("Week of %b %d, %Y")
-                       for w in weeks}
+        weeks         = sorted(df["week_start"].unique())
+        available_dates = set(df["date"].dt.date.unique())
+        min_date      = df["date"].min().date()
+        max_date      = df["date"].max().date()
 
-        st.markdown('<div class="section-header">Select a Week</div>', unsafe_allow_html=True)
-        selected_week = st.selectbox(
-            "Week", options=weeks, format_func=lambda w: week_labels[w],
-            index=len(weeks) - 1, label_visibility="collapsed",
-        )
+        st.markdown('<div class="section-header">Pick any date to load that week</div>',
+                    unsafe_allow_html=True)
+
+        import datetime
+        cal_col, info_col = st.columns([1, 2])
+        with cal_col:
+            picked = st.date_input(
+                "Select a date",
+                value=max_date,
+                min_value=min_date,
+                max_value=max_date,
+                label_visibility="collapsed",
+            )
+
+        # Find the Monday of the picked date's week
+        picked_dt     = pd.Timestamp(picked).normalize()
+        week_start_dt = picked_dt - pd.to_timedelta(picked_dt.dayofweek, unit="d")
+
+        # Snap to nearest available week if the exact one isn't in the data
+        if week_start_dt not in [pd.Timestamp(w) for w in weeks]:
+            closest = min(weeks, key=lambda w: abs(pd.Timestamp(w) - week_start_dt))
+            week_start_dt = pd.Timestamp(closest)
+            with info_col:
+                st.info(
+                    f"No data for the week of {picked.strftime('%b %d')}. "
+                    f"Showing nearest available week."
+                )
+
+        selected_week = week_start_dt
+        week_df       = df[df["week_start"] == selected_week]
+        dates_sorted  = sorted(week_df["date"].unique())
+
+        with info_col:
+            w_start_str = pd.Timestamp(selected_week).strftime("%b %d")
+            w_end_str   = week_df["date"].max().strftime("%b %d, %Y")
+            st.markdown(
+                f'<div class="metric-card" style="margin-top:4px;">'
+                f'<div class="metric-label">Showing week</div>'
+                f'<div class="metric-value" style="font-size:20px;">{w_start_str} – {w_end_str}</div>'
+                f'<div class="metric-sub">{len(dates_sorted)} days of data</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("")
 
         week_df      = df[df["week_start"] == selected_week]
         dates_sorted = sorted(week_df["date"].unique())
