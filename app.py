@@ -491,4 +491,9 @@ def main():
             iw["Units Sold"]    = iw["qty"].map("{:,.0f}".format)
             iw["Gross Revenue"] = iw["rev"].map("${:,.2f}".format)
             iw["Net Profit"]    = (iw["rev"]*NET_RATE).map("${:,.2f}".format)
-            out = iw
+            out = iw[["Week","Units Sold","Gross Revenue","Net Profit"]].reset_index(drop=True)
+            out.index += 1
+            st.dataframe(out, use_container_width=True)
+
+if __name__ == "__main__":
+    main()
