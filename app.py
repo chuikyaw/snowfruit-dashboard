@@ -436,7 +436,8 @@ def main():
 
         wk1, wk2, wk3 = st.columns(3)
         wk1.markdown(metric_card("Week Revenue", f"${week_df['rev'].sum():,.2f}",
-                                 week_labels[selected_week]), unsafe_allow_html=True)
+                                 f"{pd.Timestamp(selected_week).strftime('%b %d')} – {week_df['date'].max().strftime('%b %d, %Y')}"),
+                     unsafe_allow_html=True)
         wk2.markdown(metric_card("Units Sold", f"{int(week_df['qty'].sum()):,}",
                                  f"{week_df['item'].nunique()} unique items"), unsafe_allow_html=True)
         wk3.markdown(metric_card("Best Day", pd.Timestamp(best_day).strftime("%A"),
